@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Voice-to-Text and Translation</title>
+    <style>
+        #result {
+            white-space: nowrap;
+            overflow: hidden;
+            font-size: 24px;
+        }
+    </style>
+</head>
+<body>
+    <button id="recordButton">Start Recording</button>
+    <div id="result"></div>
+
+    <script>
+        const recordButton = document.getElementById("recordButton");
+        const resultDiv = document.getElementById("result");
+        let recognizing = false;
+        let finalTranscript = '';
+        let silenceTimer;
+
+        let recognition;
+
+        function setupRecognition() {
+            recognition = new webkitSpeechRecognition() || speechRecognition();
+            recognition.continuous = true;
+            recognition.interimResults = true;
+            recognition.lang = "de-DE"; // You can change the language as needed
+
+            recognition.onstart = () => {
+                recognizing = true;
+                recordButton.textContent = "Stop Recording";
+            };
+
+            recognition.onend = () => {
+                recognizing = false;
+                recordButton.textContent = "Start Recording";
+            };
+
+            recognition.onresult = event => {
+                const lastResult = event.results[event.results.length - 1];
+
+                let interimTranscript = '';
+                for (let i = event.resultIndex; i < event.results.length; i++) {
+                    const transcript = event.results[i][0].transcript;
+                    if (!lastResult.isFinal) {
+                        interimTranscript += transcript + ' ';
+                    } else {
+                        finalTranscript += transcript + ' ';
+                    }
+                }
+
+                resultDiv.textContent = finalTranscript + interimTranscript;
+
+                const silenceThreshold = 500; // Adjust as needed (in milliseconds)
+
+                if (!lastResult.isFinal) {
+                    if (silenceTimer) {
+                        clearTimeout(silenceTimer);
+                    }
+
+                    silenceTimer = setTimeout(() => {
+                        if (recognizing) {
+                            recognition.stop();
+                            // After recording, send the recorded text for translation
+                            getOpenAIResponse(document.getElementById("result").innerHTML)
+                                .then(translatedText => {
+                                    if (translatedText) {
+                                        // Play the translated text to the user's speakers
+                                        return playText(translatedText);
+                                    }
+                                })
+                                .catch(error => {
+                                    console.error('Error getting translation:', error);
+                                });
+                        }
+                    }, silenceThreshold);
+                } else {
+                    if (silenceTimer) {
+                        clearTimeout(silenceTimer);
+                    }
+                }
+            };
+        }
+
+        setupRecognition();
+
+        async function toggleRecording() {
+            if (recognizing) {
+                recognition.stop();
+                recognizing = false;
+                return; // Do not continue if already recognizing
+            }
+
+            finalTranscript = '';
+            resultDiv.textContent = '';
+
+            setupRecognition(); // Set up a new recognition instance
+            recognition.start();
+        }
+
+        async function getOpenAIResponse(prompt) {
+            const body = {
+                model: "gpt-3.5-turbo",
+                max_tokens: 4000,
+                messages: [
+                    { role: "system", content: "" },
+                    { role: "user", content: prompt },
+                ],
+            };
+            const headers = {
+                "Content-Type": "application/json",
+                "api-key": "eca0d85b7f0a4d688a92262ef6f34864",
+            };
+            const url = "https://cog-fmmdzwfew525e.openai.azure.com/openai/deployments/chat/chat/completions?api-version=2023-03-15-preview";
+
+            try {
+                const response = await fetch(url, {
+                    method: "POST",
+                    headers: headers,
+                    body: JSON.stringify(body),
+                });
+
+                if (!response.ok) {
+                    throw new Error('Network response was not ok');
+                }
+
+                const data = await response.json();
+                const text = data.choices[0].message.content;
+                console.log(`Azure OpenAI response to Prompt (${prompt}): ${text}`);
+                return text;
+            } catch (error) {
+                console.error('API Error:', error);
+                return null;
+            }
+        }
+
+        function playText(text) {
+            return new Promise((resolve) => {
+                const synth = window.speechSynthesis;
+                const utterance = new SpeechSynthesisUtterance(text);
+                utterance.lang = 'de-DE'; // Set the language for text-to-speech output to German
+
+                utterance.onend = () => {
+                    resolve(); // Resolve the promise after playback
+                };
+
+                synth.speak(utterance);
+            });
+        }
+
+        recordButton.addEventListener("click", toggleRecording);
+    </script>
+</body>
+</html>
