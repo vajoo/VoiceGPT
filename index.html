@@ -47,6 +47,18 @@
 
             recognition.onend = () => {
                 recognizing = false;
+                recognition.stop();
+                // After recording, send the recorded text for translation
+                getOpenAIResponse(document.getElementById("result").innerHTML)
+                    .then(translatedText => {
+                        if (translatedText) {
+                            // Play the translated text to the user's speakers
+                            return playText(translatedText);
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error getting translation:', error);
+                    });
                 recordButton.textContent = "Start Recording";
             };
 
