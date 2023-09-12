@@ -24,9 +24,12 @@
     <div id="result2"></div>
 
     <script>
+        require('dotenv').config();
+
         const recordButton = document.getElementById("recordButton");
         const resultDiv = document.getElementById("result");
         const resultDiv2 = document.getElementById("result2");
+        const api_key = process.env.API-KEY;
         let recognizing = false;
         let finalTranscript = '';
         let silenceTimer;
@@ -123,7 +126,7 @@
             };
             const headers = {
                 "Content-Type": "application/json",
-                "api-key": "eca0d85b7f0a4d688a92262ef6f34864",
+                "api-key": api_key,
             };
             const url = "https://cog-fmmdzwfew525e.openai.azure.com/openai/deployments/chat/chat/completions?api-version=2023-03-15-preview";
 
